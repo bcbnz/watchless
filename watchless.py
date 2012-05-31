@@ -25,14 +25,30 @@ class Watchless(object):
     def __init__(self, *args):
         self._command = args[1:]
         self._popen = None
-        self.x = 0
-        self.y = 0
-        self.bottom = 0
-        self.right = 0
-        self.page_height = 0
-        self.page_width = 0
         self.dirty = False
         self.screen = None
+
+        # The width and height of the screen (i.e., the controlling terminal).
+        self.screen_width = 0
+        self.screen_height = 0
+
+        # The width and height of the content we wish to display.
+        self.content_height = 0
+        self.content_width = 0
+
+        # The width and height of each 'page' of the display (i.e, the maximum
+        # area of content we can put on the screen at any one time). Smaller
+        # than the screen width due to headers etc.
+        self.page_height = 0
+        self.page_width = 0
+
+        # Position within the content of the top-left character of the display.
+        self.x = 0
+        self.y = 0
+
+        # Maximum limits of the previous x and y variables.
+        self.bottom = 0
+        self.right = 0
 
     def get_output(self):
         self._popen = subprocess.Popen(self._command, stdout=subprocess.PIPE,
@@ -42,6 +58,23 @@ class Watchless(object):
             out.extend(self._popen.stdout.readlines())
             self._popen.poll()
         return out
+
+    def calculate_sizes(self):
+        # Get the screen size, and from this the size of the page we can
+        # display. Note we need to subtract one to get the 'index' of the last
+        # available column and row.
+        screenh, screenw = self.screen.getmaxyx()
+        self.screen_height = screenh - 1
+        self.screen_width = screenw - 1
+        self.page_height = self.screen_height - 2
+        self.page_width = self.screen_width
+
+        # Calculate the maximum x and y positions for the pad. Note that this is
+        # the (x, y) coordinate within the pad that should be at the top-left of
+        # the available area so that the bottom/right content is visible at the
+        # bottom-right corner of the display.
+        self.right = self.content_width - self.page_width
+        self.bottom = self.content_height - self.page_height
 
     def handle_keys(self):
         # Get any pending key. In no-delay mode, -1 means there was no key
@@ -86,6 +119,15 @@ class Watchless(object):
             self.x += self.page_width
             self.dirty = True
 
+        # Resize signals are sent via getch (go figure). When the screen is
+        # resized, we need to recalculate the page area etc. A full screen
+        # refresh (in addition to the pad refresh to update the content) is
+        # needed to clear any artifacts.
+        elif key == curses.KEY_RESIZE:
+            self.screen.refresh()
+            self.calculate_sizes()
+            self.dirty = True
+
     def run(self, screen):
         # Save the screen for future reference.
         self.screen = screen
@@ -101,34 +143,22 @@ class Watchless(object):
         out = self.get_output()
 
         # Calculate width and height of the output.
-        height = len(out)
-        width = max(len(o) for o in out)
+        self.content_height = len(out)
+        self.content_width = max(len(o) for o in out)
 
         # Create a pad for the output and add the contents to it. The +1 is to
         # give us a buffer character/row - when addstr() is done, the cursor is
         # moved to the character after the end of the string. If there is not
         # room in the pad for this, an exception is raised.
-        pad = curses.newpad(height+1, width+1)
+        pad = curses.newpad(self.content_height+1, self.content_width+1)
         for y, line in enumerate(out):
             pad.addstr(y, 0, line)
 
-        # Get the screen size, and from this the size of the page we can
-        # display. Note we need to subtract one to get the 'index' of the last
-        # available column and row.
-        screenh, screenw = screen.getmaxyx()
-        screenh -= 1; screenw -= 1
-        self.page_height = screenh - 2
-        self.page_width = screenw
-
-        # Calculate the maximum x and y positions for the pad. Note that this is
-        # the (x, y) coordinate within the pad that should be at the top-left of
-        # the available area so that the bottom/right content is visible at the
-        # bottom-right corner of the display.
-        self.right = width - self.page_width
-        self.bottom = height - self.page_height
+        # Calculate size of page area etc.
+        self.calculate_sizes()
 
         # Display the pad, leaving room for the header plus a blank line.
-        pad.refresh(self.y, self.x, 2, 0, screenh, screenw)
+        pad.refresh(self.y, self.x, 2, 0, self.screen_height, self.screen_width)
 
         # Infinite loop for the time being.
         while True:
@@ -142,7 +172,7 @@ class Watchless(object):
                 self.x = max(min(self.x, self.right), 0)
 
                 # Redraw and we're done.
-                pad.refresh(self.y, self.x, 2, 0, screenh, screenw)
+                pad.refresh(self.y, self.x, 2, 0, self.screen_height, self.screen_width)
                 self.dirty = False
 
 if __name__ == '__main__':
