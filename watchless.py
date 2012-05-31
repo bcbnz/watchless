@@ -25,6 +25,14 @@ class Watchless(object):
     def __init__(self, *args):
         self._command = args[1:]
         self._popen = None
+        self.x = 0
+        self.y = 0
+        self.bottom = 0
+        self.right = 0
+        self.page_height = 0
+        self.page_width = 0
+        self.dirty = False
+        self.screen = None
 
     def get_output(self):
         self._popen = subprocess.Popen(self._command, stdout=subprocess.PIPE,
@@ -35,7 +43,56 @@ class Watchless(object):
             self._popen.poll()
         return out
 
+    def handle_keys(self):
+        # Get any pending key. In no-delay mode, -1 means there was no key
+        # waiting.
+        key = self.screen.getch()
+        if key == -1:
+            return
+
+        # Page movement keys.
+        if key == curses.KEY_UP:
+            self.y -= 1
+            self.dirty = True
+        elif key == curses.KEY_DOWN:
+            self.y += 1
+            self.dirty = True
+        elif key == curses.KEY_NPAGE or key == 519:
+            # 519 == control-down
+            self.y += self.page_height
+            self.dirty = True
+        elif key == curses.KEY_PPAGE or key == 560:
+            # 560 == control-up
+            self.y -= self.page_height
+            self.dirty = True
+        elif key == curses.KEY_LEFT:
+            self.x -= 1
+            self.dirty = True
+        elif key == curses.KEY_RIGHT:
+            self.x += 1
+            self.dirty = True
+        elif key == curses.KEY_END:
+            self.y = self.bottom
+            self.dirty = True
+        elif key == curses.KEY_HOME:
+            self.y = 0
+            self.dirty = True
+        elif key == 539:
+            # Control-left
+            self.x -= self.page_width
+            self.dirty = True
+        elif key == 554:
+            # Control-right
+            self.x += self.page_width
+            self.dirty = True
+
     def run(self, screen):
+        # Save the screen for future reference.
+        self.screen = screen
+
+        # Enter no-delay mode so that getch() is non-blocking.
+        self.screen.nodelay(True)
+
         # Print the header.
         screen.addstr(0, 0, "Every 2.0s: {0:s}".format(' '.join(self._command)))
         screen.refresh()
@@ -47,51 +104,46 @@ class Watchless(object):
         height = len(out)
         width = max(len(o) for o in out)
 
-        # Create a pad for the output and add the contents to it.
+        # Create a pad for the output and add the contents to it. The +1 is to
+        # give us a buffer character/row - when addstr() is done, the cursor is
+        # moved to the character after the end of the string. If there is not
+        # room in the pad for this, an exception is raised.
         pad = curses.newpad(height+1, width+1)
         for y, line in enumerate(out):
             pad.addstr(y, 0, line)
 
-        # Start the pad two lines from the top and fill the rest of the screen.
+        # Get the screen size, and from this the size of the page we can
+        # display. Note we need to subtract one to get the 'index' of the last
+        # available column and row.
         screenh, screenw = screen.getmaxyx()
-        x = 0
-        y = 0
-        pad.refresh(y, x, 2, 0, screenh-1, screenw-1)
+        screenh -= 1; screenw -= 1
+        self.page_height = screenh - 2
+        self.page_width = screenw
 
-        # Maximum x and y positions for the pad.
-        maxx = width - (screenw - 1)
-        maxy = height - (screenh - 3)
+        # Calculate the maximum x and y positions for the pad. Note that this is
+        # the (x, y) coordinate within the pad that should be at the top-left of
+        # the available area so that the bottom/right content is visible at the
+        # bottom-right corner of the display.
+        self.right = width - self.page_width
+        self.bottom = height - self.page_height
+
+        # Display the pad, leaving room for the header plus a blank line.
+        pad.refresh(self.y, self.x, 2, 0, screenh, screenw)
 
         # Infinite loop for the time being.
         while True:
-            key = screen.getch()
-            if key == curses.KEY_UP:
-                y -= 1
-            elif key == curses.KEY_DOWN:
-                y += 1
-            elif key == curses.KEY_NPAGE or key == 519:
-                # 519 == control-down
-                y += (screenh - 3)
-            elif key == curses.KEY_PPAGE or key == 560:
-                # 560 == control-up
-                y -= (screenh - 3)
-            elif key == curses.KEY_LEFT:
-                x -= 1
-            elif key == curses.KEY_RIGHT:
-                x += 1
-            elif key == curses.KEY_END:
-                y = maxy
-            elif key == curses.KEY_HOME:
-                y = 0
-            elif key == 539:
-                # Control-left
-                x -= (screenw - 1)
-            elif key == 554:
-                # Control-right
-                x += (screenw - 1)
-            y = max(min(y, maxy), 0)
-            x = max(min(x, maxx), 0)
-            pad.refresh(y, x, 2, 0, screenh-1, screenw-1)
+            # Handle any key presses.
+            self.handle_keys()
+
+            # We need to refresh the screen.
+            if self.dirty:
+                # Ensure the position is kept within limits.
+                self.y = max(min(self.y, self.bottom), 0)
+                self.x = max(min(self.x, self.right), 0)
+
+                # Redraw and we're done.
+                pad.refresh(self.y, self.x, 2, 0, screenh, screenw)
+                self.dirty = False
 
 if __name__ == '__main__':
     wl = Watchless(*sys.argv)
