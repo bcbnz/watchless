@@ -54,11 +54,44 @@ class Watchless(object):
 
         # Start the pad two lines from the top and fill the rest of the screen.
         screenh, screenw = screen.getmaxyx()
-        pad.refresh(0, 0, 2, 0, screenh-1, screenw-1)
+        x = 0
+        y = 0
+        pad.refresh(y, x, 2, 0, screenh-1, screenw-1)
+
+        # Maximum x and y positions for the pad.
+        maxx = width - (screenw - 1)
+        maxy = height - (screenh - 3)
 
         # Infinite loop for the time being.
         while True:
-            continue
+            key = screen.getch()
+            if key == curses.KEY_UP:
+                y -= 1
+            elif key == curses.KEY_DOWN:
+                y += 1
+            elif key == curses.KEY_NPAGE or key == 519:
+                # 519 == control-down
+                y += (screenh - 3)
+            elif key == curses.KEY_PPAGE or key == 560:
+                # 560 == control-up
+                y -= (screenh - 3)
+            elif key == curses.KEY_LEFT:
+                x -= 1
+            elif key == curses.KEY_RIGHT:
+                x += 1
+            elif key == curses.KEY_END:
+                y = maxy
+            elif key == curses.KEY_HOME:
+                y = 0
+            elif key == 539:
+                # Control-left
+                x -= (screenw - 1)
+            elif key == 554:
+                # Control-right
+                x += (screenw - 1)
+            y = max(min(y, maxy), 0)
+            x = max(min(x, maxx), 0)
+            pad.refresh(y, x, 2, 0, screenh-1, screenw-1)
 
 if __name__ == '__main__':
     wl = Watchless(*sys.argv)
