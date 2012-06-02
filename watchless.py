@@ -22,7 +22,11 @@ import subprocess
 import sys
 import time
 
-class Watchless(object):
+class WatchLess(object):
+    """The main class which implements the periodic execution and paged display
+    of its output.
+    """
+
     def __init__(self, *args):
         self._command = args[1:]
         self.delay = 2.0
@@ -61,6 +65,16 @@ class Watchless(object):
         self.header_time = None
 
     def process_command(self):
+        """Execute the command if it is time to and return the results. This
+        takes care of timing the repetition, watching for the output etc. in a
+        non-blocking manner. Call it regularly.
+
+        :return: If the command has finished executing and the output not yet
+                 collected, a list of the output of the command, with each entry
+                 corresponding to one line of output. Otherwise, ``None`` is
+                 returned.
+
+        """
         # Not currently running.
         if self._popen is None:
             # Time to run it again.
@@ -93,6 +107,11 @@ class Watchless(object):
         return self._buffer
 
     def calculate_sizes(self):
+        """Calculate the screen and page heights, plus the x- and y-positions of
+        the bottom and right hand side of the content. Call whenever the
+        content changes or a screen resize notification is received.
+
+        """
         # Get the screen size, and from this the size of the page we can
         # display. Note we need to subtract one to get the 'index' of the last
         # available column and row.
@@ -110,6 +129,20 @@ class Watchless(object):
         self.bottom = self.content_height - self.page_height
 
     def handle_keys(self):
+        """Receive any keys pressed by the user and update the instance
+        variables appropriately. If the display of the content needs to be
+        changed (e.g., if the user scrolled the page), the ``dirty`` attribute
+        is set to ``True``. Since curses reports screen resize events as a key
+        press, resizes are also handled by this method.
+
+        This method is designed to work in a non-blocking manner.
+
+        NB. The x- and y-position attributes are not bounds checked after being
+        changed; this needs to be performed by the caller. The reasoning behind
+        this is that the bounds may change anyway (e.g., if the content has
+        changed), so the caller would have to do the check anyway.
+
+        """
         # Get any pending key. In no-delay mode, -1 means there was no key
         # waiting.
         key = self.screen.getch()
@@ -163,6 +196,11 @@ class Watchless(object):
             self.dirty = True
 
     def update_header(self):
+        """Updates the header at the top of the screen with the command being
+        executed and the time that the last execution finished. Should be called
+        whenever execution finished or the screen is resized.
+
+        """
         # Clear the existing header.
         self.screen.move(0, 0)
         self.screen.clrtoeol()
@@ -199,6 +237,12 @@ class Watchless(object):
         self.screen.refresh()
 
     def run(self, screen):
+        """Run the display. This takes control of the execution and blocks until
+        the user stops it.
+
+        :param screen: The curses screen to display the content on.
+
+        """
         # Save the screen for future reference.
         self.screen = screen
 
@@ -282,5 +326,5 @@ class Watchless(object):
             time.sleep(0.01)
 
 if __name__ == '__main__':
-    wl = Watchless(*sys.argv)
+    wl = WatchLess(*sys.argv)
     curses.wrapper(wl.run)
