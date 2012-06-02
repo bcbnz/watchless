@@ -20,13 +20,17 @@
 import curses
 import subprocess
 import sys
+import time
 
 class Watchless(object):
     def __init__(self, *args):
         self._command = args[1:]
+        self.delay = 2.0
         self._popen = None
         self.dirty = False
         self.screen = None
+        self.pad = None
+        self.next_run = None
 
         # The width and height of the screen (i.e., the controlling terminal).
         self.screen_width = 0
@@ -50,14 +54,36 @@ class Watchless(object):
         self.bottom = 0
         self.right = 0
 
-    def get_output(self):
-        self._popen = subprocess.Popen(self._command, stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE, shell=True)
-        out = []
-        while self._popen.returncode is None:
-            out.extend(self._popen.stdout.readlines())
-            self._popen.poll()
-        return out
+    def process_command(self):
+        # Not currently running.
+        if self._popen is None:
+            # Time to run it again.
+            if self.next_run is None or time.time() >= self.next_run:
+                # Start the command running.
+                self._popen = subprocess.Popen(self._command, shell=True,
+                                               stdout=subprocess.PIPE,
+                                               stderr=subprocess.PIPE)
+
+                # Clear the buffer for any output.
+                self._buffer = []
+
+            # Nothing to return at this point.
+            return None
+
+        # Add any current output to our buffer.
+        self._buffer.extend(self._popen.stdout.readlines())
+
+        # Update the status of the process.
+        self._popen.poll()
+
+        # Still running.
+        if self._popen.returncode is None:
+            return None
+
+        # Finished. Set the time to run it next and return the output.
+        self._popen = None
+        self.next_run = time.time() + self.delay
+        return self._buffer
 
     def calculate_sizes(self):
         # Get the screen size, and from this the size of the page we can
@@ -137,6 +163,16 @@ class Watchless(object):
         if curses.has_colors():
             curses.use_default_colors()
 
+        # Disable the cursor if possible.
+        try:
+            curses.curs_set(0)
+        except curses.error:
+            # Try to set it to 'normal' rather than 'very visible' if we can.
+            try:
+                curses.curs_set(1)
+            except curses.error:
+                pass
+
         # Enter no-delay mode so that getch() is non-blocking.
         self.screen.nodelay(True)
 
@@ -144,31 +180,49 @@ class Watchless(object):
         screen.addstr(0, 0, "Every 2.0s: {0:s}".format(' '.join(self._command)))
         screen.refresh()
 
-        # Get the output.
-        out = self.get_output()
-
-        # Calculate width and height of the output.
-        self.content_height = len(out)
-        self.content_width = max(len(o) for o in out)
-
-        # Create a pad for the output and add the contents to it. The +1 is to
-        # give us a buffer character/row - when addstr() is done, the cursor is
-        # moved to the character after the end of the string. If there is not
-        # room in the pad for this, an exception is raised.
-        pad = curses.newpad(self.content_height+1, self.content_width+1)
-        for y, line in enumerate(out):
-            pad.addstr(y, 0, line)
+        # Create a pad for the output of the command.
+        self.pad = curses.newpad(1, 1)
 
         # Calculate size of page area etc.
         self.calculate_sizes()
 
-        # Display the pad, leaving room for the header plus a blank line.
-        pad.refresh(self.y, self.x, 2, 0, self.screen_height, self.screen_width)
-
-        # Infinite loop for the time being.
+        # Keep going as long as we need to.
         while True:
             # Handle any key presses.
             self.handle_keys()
+
+            # Check for output.
+            content = self.process_command()
+            if content is not None:
+                # There is no point going through the output twice, once to
+                # calculate the width and once to add it to the pad. Instead,
+                # we'll resize as we go. To avoid too much resizing, we'll
+                # double the width each time its too small, and then do a final
+                # resize at the end. The width of the previous output is a
+                # reasonable starting point.
+                self.content_height = len(content)
+                w = self.content_width or 1
+                self.pad.resize(self.content_height + 1, w + 1)
+
+                # Add each line.
+                for y, line in enumerate(content):
+                    # Update the approximate and real widths of the pad.
+                    l = len(line)
+                    if l > w:
+                        while l > w:
+                            w *= 2
+                            self.content_width = l
+                        self.pad.resize(self.content_height + 1, w + 1)
+
+                    # Add this line.
+                    self.pad.addstr(y, 0, line)
+
+                # Resize the pad to the final size.
+                self.pad.resize(self.content_height + 1, self.content_width + 1)
+
+                # Recalculate page boundaries etc and mark for redrawing.
+                self.calculate_sizes()
+                self.dirty = True
 
             # We need to refresh the screen.
             if self.dirty:
@@ -177,8 +231,11 @@ class Watchless(object):
                 self.x = max(min(self.x, self.right), 0)
 
                 # Redraw and we're done.
-                pad.refresh(self.y, self.x, 2, 0, self.screen_height, self.screen_width)
+                self.pad.refresh(self.y, self.x, 2, 0, self.screen_height, self.screen_width)
                 self.dirty = False
+
+            # Sleep a bit to avoid hogging all the CPU.
+            time.sleep(0.01)
 
 if __name__ == '__main__':
     wl = Watchless(*sys.argv)
