@@ -132,6 +132,11 @@ class Watchless(object):
         # Save the screen for future reference.
         self.screen = screen
 
+        # If this terminal supports colours, tell it to use its default colours
+        # for this screen.
+        if curses.has_colors():
+            curses.use_default_colors()
+
         # Enter no-delay mode so that getch() is non-blocking.
         self.screen.nodelay(True)
 
