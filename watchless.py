@@ -54,6 +54,12 @@ class Watchless(object):
         self.bottom = 0
         self.right = 0
 
+        # Details for the header. The time of the last execution is stored so it
+        # can be used when the window is resized etc.
+        self.cmd_str = 'Every ' + str(self.delay) + 's: ' + ' '.join(self._command)
+        self.cmd_str_len = len(self.cmd_str)
+        self.header_time = None
+
     def process_command(self):
         # Not currently running.
         if self._popen is None:
@@ -82,6 +88,7 @@ class Watchless(object):
 
         # Finished. Set the time to run it next and return the output.
         self._popen = None
+        self.header_time = time.localtime()
         self.next_run = time.time() + self.delay
         return self._buffer
 
@@ -150,9 +157,46 @@ class Watchless(object):
         # refresh (in addition to the pad refresh to update the content) is
         # needed to clear any artifacts.
         elif key == curses.KEY_RESIZE:
-            self.screen.refresh()
             self.calculate_sizes()
+            self.update_header()
+            self.screen.refresh()
             self.dirty = True
+
+    def update_header(self):
+        # Clear the existing header.
+        self.screen.move(0, 0)
+        self.screen.clrtoeol()
+
+        # If the command has been executed, show the time the execution
+        # completed.
+        if self.header_time:
+            # Let the time module convert it to a string in the appropriate
+            # locale.
+            tstr = time.strftime('%c', self.header_time)
+            tlen = len(tstr)
+            tpos = self.screen_width - tlen
+            if tpos < 0:
+                self.screen.addstr(0, 0, tstr[:self.screen_width])
+            else:
+                self.screen.addstr(0, tpos, tstr)
+        else:
+            tpos = self.screen_width
+
+        # The 'Every Ns: ' bit takes at least 10 characters. Add in the space
+        # between the command and the date, plus at least one character for the
+        # command, and we need an absolute minimum of 12 characters to show the
+        # command string in.
+        if tpos >= 12:
+            # If the whole command string cannot fit before the date, truncate it
+            # and append an ellipsis.
+            if self.cmd_str_len > (tpos - 2):
+                self.screen.addstr(0, 0, self.cmd_str[:tpos-5])
+                self.screen.addstr(0, tpos-5, "...")
+            else:
+                self.screen.addstr(0, 0, self.cmd_str)
+
+        # No point doing all this work if we don't show it...
+        self.screen.refresh()
 
     def run(self, screen):
         # Save the screen for future reference.
@@ -176,15 +220,14 @@ class Watchless(object):
         # Enter no-delay mode so that getch() is non-blocking.
         self.screen.nodelay(True)
 
-        # Print the header.
-        screen.addstr(0, 0, "Every 2.0s: {0:s}".format(' '.join(self._command)))
-        screen.refresh()
-
         # Create a pad for the output of the command.
         self.pad = curses.newpad(1, 1)
 
         # Calculate size of page area etc.
         self.calculate_sizes()
+
+        # Show the header so the user knows things have started up.
+        self.update_header()
 
         # Keep going as long as we need to.
         while True:
@@ -223,6 +266,7 @@ class Watchless(object):
                 # Recalculate page boundaries etc and mark for redrawing.
                 self.calculate_sizes()
                 self.dirty = True
+                self.update_header()
 
             # We need to refresh the screen.
             if self.dirty:
