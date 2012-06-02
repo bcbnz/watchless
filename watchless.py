@@ -52,7 +52,7 @@ class Watchless(object):
 
     def get_output(self):
         self._popen = subprocess.Popen(self._command, stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE)
+                                       stderr=subprocess.PIPE, shell=True)
         out = []
         while self._popen.returncode is None:
             out.extend(self._popen.stdout.readlines())
