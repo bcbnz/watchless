@@ -27,9 +27,16 @@ class WatchLess(object):
     of its output.
     """
 
-    def __init__(self, *args):
-        self._command = args[1:]
-        self.delay = 2.0
+    def __init__(self, command, delay=2):
+        """
+        :param command: The command to run.
+        :param delay: The delay, in seconds, between execution.
+
+        """
+        self._command = command
+        self.delay = delay
+
+        # Some basic variables.
         self._popen = None
         self.dirty = False
         self.screen = None
@@ -326,5 +333,5 @@ class WatchLess(object):
             time.sleep(0.01)
 
 if __name__ == '__main__':
-    wl = WatchLess(*sys.argv)
+    wl = WatchLess(command=sys.argv[1:])
     curses.wrapper(wl.run)
