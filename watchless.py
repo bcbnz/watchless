@@ -142,6 +142,16 @@ class WatchLess(object):
         self.bottom = 0
         self.right = 0
 
+        # In Python 3 and above, the subprocess returns raw bytes which we need
+        # to decode into strings. Lets figure out the appropriate encoding to
+        # decode with.
+        if sys.hexversion >= 0x03000000:
+            import locale
+            locale.setlocale(locale.LC_ALL, '')
+            self.decode = locale.getpreferredencoding()
+        else:
+            self.decode = False
+
     @classmethod
     def from_arguments(klass, program_name, *args):
         """Factory method which takes a set of command line arguments and
@@ -406,6 +416,10 @@ class WatchLess(object):
 
                     # Add each line.
                     for y, line in enumerate(content):
+                        # Decode the line to a string if needed.
+                        if self.decode:
+                            line = line.decode(self.decode)
+
                         # Update the approximate and real widths of the pad.
                         l = len(line)
                         if l > w:
