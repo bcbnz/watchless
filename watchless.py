@@ -343,87 +343,97 @@ class WatchLess(object):
         :param screen: The curses screen to display the content on.
 
         """
-        # Save the screen for future reference.
-        self.screen = screen
-
-        # If this terminal supports colours, tell it to use its default colours
-        # for this screen.
-        if curses.has_colors():
-            curses.use_default_colors()
-
-        # Disable the cursor if possible.
+        # Wrap the whole thing in a try-except block so we can detect the user
+        # pressing Ctrl-C to exit.
         try:
-            curses.curs_set(0)
-        except curses.error:
-            # Try to set it to 'normal' rather than 'very visible' if we can.
+            # Save the screen for future reference.
+            self.screen = screen
+
+            # If this terminal supports colours, tell it to use its default
+            # colours for this screen.
+            if curses.has_colors():
+                curses.use_default_colors()
+
+            # Disable the cursor if possible.
             try:
-                curses.curs_set(1)
+                curses.curs_set(0)
             except curses.error:
-                pass
+                # Try to set it to 'normal' rather than 'very visible' if we
+                # can.
+                try:
+                    curses.curs_set(1)
+                except curses.error:
+                    pass
 
-        # Enter no-delay mode so that getch() is non-blocking.
-        self.screen.nodelay(True)
+            # Enter no-delay mode so that getch() is non-blocking.
+            self.screen.nodelay(True)
 
-        # Create a pad for the output of the command.
-        self.pad = curses.newpad(1, 1)
+            # Create a pad for the output of the command.
+            self.pad = curses.newpad(1, 1)
 
-        # Calculate size of page area etc.
-        self.calculate_sizes()
+            # Calculate size of page area etc.
+            self.calculate_sizes()
 
-        # Show the header so the user knows things have started up.
-        self.update_header()
+            # Show the header so the user knows things have started up.
+            self.update_header()
 
-        # Keep going as long as we need to.
-        while True:
-            # Handle any key presses.
-            self.handle_keys()
+            # Keep going as long as we need to.
+            while True:
+                # Handle any key presses.
+                self.handle_keys()
 
-            # Check for output.
-            content = self.process_command()
-            if content is not None:
-                # There is no point going through the output twice, once to
-                # calculate the width and once to add it to the pad. Instead,
-                # we'll resize as we go. To avoid too much resizing, we'll
-                # double the width each time its too small, and then do a final
-                # resize at the end. The width of the previous output is a
-                # reasonable starting point.
-                self.content_height = len(content)
-                w = self.content_width or 1
-                self.pad.resize(self.content_height + 1, w + 1)
+                # Check for output.
+                content = self.process_command()
+                if content is not None:
+                    # There is no point going through the output twice, once to
+                    # calculate the width and once to add it to the pad.
+                    # Instead, we'll resize as we go. To avoid too much
+                    # resizing, we'll double the width each time its too small,
+                    # and then do a final resize at the end. The width of the
+                    # previous output is a reasonable starting point.
+                    self.content_height = len(content)
+                    w = self.content_width or 1
+                    self.pad.resize(self.content_height + 1, w + 1)
 
-                # Add each line.
-                for y, line in enumerate(content):
-                    # Update the approximate and real widths of the pad.
-                    l = len(line)
-                    if l > w:
-                        while l > w:
-                            w *= 2
-                            self.content_width = l
-                        self.pad.resize(self.content_height + 1, w + 1)
+                    # Add each line.
+                    for y, line in enumerate(content):
+                        # Update the approximate and real widths of the pad.
+                        l = len(line)
+                        if l > w:
+                            while l > w:
+                                w *= 2
+                                self.content_width = l
+                            self.pad.resize(self.content_height + 1, w + 1)
 
-                    # Add this line.
-                    self.pad.addstr(y, 0, line)
+                        # Add this line.
+                        self.pad.addstr(y, 0, line)
 
-                # Resize the pad to the final size.
-                self.pad.resize(self.content_height + 1, self.content_width + 1)
+                    # Resize the pad to the final size.
+                    self.pad.resize(self.content_height + 1, self.content_width + 1)
 
-                # Recalculate page boundaries etc and mark for redrawing.
-                self.calculate_sizes()
-                self.dirty = True
-                self.update_header()
+                    # Recalculate page boundaries etc and mark for redrawing.
+                    self.calculate_sizes()
+                    self.dirty = True
+                    self.update_header()
 
-            # We need to refresh the screen.
-            if self.dirty:
-                # Ensure the position is kept within limits.
-                self.y = max(min(self.y, self.bottom), 0)
-                self.x = max(min(self.x, self.right), 0)
+                # We need to refresh the screen.
+                if self.dirty:
+                    # Ensure the position is kept within limits.
+                    self.y = max(min(self.y, self.bottom), 0)
+                    self.x = max(min(self.x, self.right), 0)
 
-                # Redraw and we're done.
-                self.pad.refresh(self.y, self.x, 2, 0, self.screen_height, self.screen_width)
-                self.dirty = False
+                    # Redraw and we're done.
+                    self.pad.refresh(self.y, self.x, 2, 0, self.screen_height,
+                                     self.screen_width)
+                    self.dirty = False
 
-            # Sleep a bit to avoid hogging all the CPU.
-            time.sleep(0.01)
+                # Sleep a bit to avoid hogging all the CPU.
+                time.sleep(0.01)
+
+        # User pressed Ctrl-C.
+        except KeyboardInterrupt:
+            pass
+
 
 if __name__ == '__main__':
     wl = WatchLess.from_arguments(*sys.argv)
