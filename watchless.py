@@ -18,9 +18,22 @@
 # watchless.  If not, see <http://www.gnu.org/licenses/>.
 
 import curses
+import optparse
 import subprocess
 import sys
 import time
+
+
+# Set up a commandline parser.
+usage = """Usage: %prog [options] <command>
+
+Execute a command periodically and display the output."""
+parser = optparse.OptionParser(usage=usage)
+parser.disable_interspersed_args()
+parser.add_option('-n', '--interval', dest="interval", type="float", default=2.0,
+                  help="time to wait between updates [default: %defaults]",
+                  metavar="seconds")
+
 
 class WatchLess(object):
     """The main class which implements the periodic execution and paged display
@@ -70,6 +83,37 @@ class WatchLess(object):
         self.cmd_str = 'Every ' + str(self.interval) + 's: ' + ' '.join(self._command)
         self.cmd_str_len = len(self.cmd_str)
         self.header_time = None
+
+    @classmethod
+    def from_arguments(klass, program_name, *args):
+        """Factory method which takes a set of command line arguments and
+        returns an instance of WatchLess set up as per those arguments. If the
+        user asks for a help message, or there are errors in the arguments, the
+        appropriate output will be printed and a SystemExit raised to indicate
+        processing is complete.
+
+        :param program_name: The name of the program as it should be displayed
+                             in any help/usage messages.
+
+        """
+        # Run the arguments through the parser. This will print errors/help and
+        # exit as appropriate.
+        parser.prog = program_name
+        options, command = parser.parse_args(list(args))
+
+        # No command given.
+        if not command:
+            sys.stdout.write('Error: no command given.\n\n')
+            parser.print_help()
+            raise SystemExit(1)
+
+        # Pull the arguments that were given into a dictionary.
+        initargs = {}
+        if options.interval is not None:
+            initargs['interval'] = options.interval
+
+        # Create the object and we're done.
+        return klass(command, **initargs)
 
     def process_command(self):
         """Execute the command if it is time to and return the results. This
@@ -333,5 +377,5 @@ class WatchLess(object):
             time.sleep(0.01)
 
 if __name__ == '__main__':
-    wl = WatchLess(command=sys.argv[1:])
+    wl = WatchLess.from_arguments(*sys.argv)
     curses.wrapper(wl.run)
