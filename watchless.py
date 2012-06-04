@@ -23,12 +23,16 @@ import subprocess
 import sys
 import time
 
+# Version information.
+version = '0.1.0'
+version_info = (0, 1, 0, 'final', 0)
+hexversion = 0x000100f0
 
 # Set up a commandline parser.
 usage = """Usage: %prog [options] <command>
 
 Execute a command periodically and display the output."""
-parser = optparse.OptionParser(usage=usage)
+parser = optparse.OptionParser(usage=usage, version="%prog "+version)
 parser.disable_interspersed_args()
 parser.add_option('-n', '--interval', dest="interval", type="float", default=2.0,
                   help="time to wait between updates [default: %defaults]",
@@ -42,6 +46,11 @@ class WatchLess(object):
     """The main class which implements the periodic execution and paged display
     of its output.
     """
+
+    # Copy module version numbering to class.
+    version = version
+    version_info = version_info
+    hexversion = hexversion
 
     def __init__(self, command, interval=2, shell=None):
         """The standard Python subprocess module is used to execute the command.
