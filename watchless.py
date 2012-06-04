@@ -27,14 +27,14 @@ class WatchLess(object):
     of its output.
     """
 
-    def __init__(self, command, delay=2):
+    def __init__(self, command, interval=2):
         """
         :param command: The command to run.
-        :param delay: The delay, in seconds, between execution.
+        :param interval: The interval, in seconds, between execution.
 
         """
         self._command = command
-        self.delay = delay
+        self.interval = interval
 
         # Some basic variables.
         self._popen = None
@@ -67,7 +67,7 @@ class WatchLess(object):
 
         # Details for the header. The time of the last execution is stored so it
         # can be used when the window is resized etc.
-        self.cmd_str = 'Every ' + str(self.delay) + 's: ' + ' '.join(self._command)
+        self.cmd_str = 'Every ' + str(self.interval) + 's: ' + ' '.join(self._command)
         self.cmd_str_len = len(self.cmd_str)
         self.header_time = None
 
@@ -110,7 +110,7 @@ class WatchLess(object):
         # Finished. Set the time to run it next and return the output.
         self._popen = None
         self.header_time = time.localtime()
-        self.next_run = time.time() + self.delay
+        self.next_run = time.time() + self.interval
         return self._buffer
 
     def calculate_sizes(self):
