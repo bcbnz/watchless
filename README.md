@@ -1,0 +1,60 @@
+watchless
+=========
+
+*Version 0.1.0 - 5 June 2012*
+
+watchless is a Python clone of the standard Unix ``watch`` command with the
+addition of paging support along the lines of another standard Unix command,
+``less``.
+
+Requirements
+============
+
+* Python 2.4 or greater with the curses module available (should be present on
+  Unix-based systems; Windows has no support by default, although some Cygwin
+  builds *may* have it and there are third-party libraries claim to implement
+  it -- your mileage may vary).
+
+Usage
+=====
+
+``./watchless.py [options] <command>``
+
+Options
+-------
+
+* ``--version`` - show program's version number and exit
+* ``-h``, ``--help`` - show a help message and exit
+* ``-n <seconds>``, ``--interval=<seconds>`` - time to wait between updates [default: 2.0s]
+
+Future work
+===========
+
+* Support more of the standard ``watch`` options, such as showing the
+  difference between runs of the command.
+
+Bug reports
+===========
+
+File any bug reports or feature requests in the project's GitHub issue tracker at
+<https://github.com/blairbonnett/watchless/issues>.
+
+Copyright
+=========
+
+watchless is copyright (c) 2012 Blair Bonnett
+
+License
+=======
+
+watchless is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+watchless is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+watchless.  If not, see <http://www.gnu.org/licenses/>.
