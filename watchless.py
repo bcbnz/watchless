@@ -34,19 +34,74 @@ parser.add_option('-n', '--interval', dest="interval", type="float", default=2.0
                   help="time to wait between updates [default: %defaults]",
                   metavar="seconds")
 
+# List of characters which if present in a command indicate it needs to be run
+# in an external command.
+shell_chars = ('*', '|', '&', '(', '[')
 
 class WatchLess(object):
     """The main class which implements the periodic execution and paged display
     of its output.
     """
 
-    def __init__(self, command, interval=2):
-        """
-        :param command: The command to run.
+    def __init__(self, command, interval=2, shell=None):
+        """The standard Python subprocess module is used to execute the command.
+        This can either do so within the current process (``shell=False``) or
+        using an external shell (``shell=True``). In general, ``shell=False`` is
+        preferred except when the command contains special shell characters
+        (e.g., the globbing character '*') which needs to be run in a shell to
+        work properly. In this case, it usually has to be escaped when entering
+        it and so the command passed in is a single-entry list.
+
+        If the ``shell`` parameter is ``None``, the class will try to guess the
+        appropriate setting using the following two steps:
+
+            1. If the command list has more than one item, assume the command
+               was not escaped when entered and therefore has no special
+               characters; set ``shell`` to ``False``. Otherwise go to 2.
+            2. If the single entry has any special characters (the list of which
+               is defined in the module-level variable ``shell_chars``), then
+               set ``shell`` to ``True``. Otherwise set it to ``False``.
+
+        :param command: The command to run as a list of one or more strings.
         :param interval: The interval, in seconds, between execution.
+        :param shell: Whether to spawn an external shell to run the command in.
+                      If ``None``, the class tries to guess the appropriate
+                      value based on the command.
 
         """
-        self._command = command
+        # Details for the header. The time of the last execution is stored so it
+        # can be used when the window is resized etc.
+        # We do this before checking the command is in the right format for the
+        # shell setting to avoid having to special-case depending on whether the
+        # command is then a string or a list -- at this point it is a list in
+        # either case and this gives the correct display.
+        self.cmd_str = 'Every ' + str(interval) + 's: ' + ' '.join(command)
+        self.cmd_str_len = len(self.cmd_str)
+        self.header_time = None
+
+        # Try to auto-detect if we need shell mode.
+        if shell is None:
+            # Multiple arguments --> shell not needed.
+            if len(command) > 1:
+                shell = False
+
+            # One argument --> check for presence of special characters which
+            # need an external shell to handle properly.
+            else:
+                shell = any(char in command[0] for char in shell_chars)
+
+                # Shell mode needed --> command needs to be a single string.
+                if shell:
+                    command = command[0]
+
+        # Shell mode forced on. In this case the command needs to be a single
+        # string.
+        elif shell:
+            command = ' '.join(command)
+
+        # Store the details we were given.
+        self.command = command
+        self.shell = shell
         self.interval = interval
 
         # Some basic variables.
@@ -77,12 +132,6 @@ class WatchLess(object):
         # Maximum limits of the previous x and y variables.
         self.bottom = 0
         self.right = 0
-
-        # Details for the header. The time of the last execution is stored so it
-        # can be used when the window is resized etc.
-        self.cmd_str = 'Every ' + str(self.interval) + 's: ' + ' '.join(self._command)
-        self.cmd_str_len = len(self.cmd_str)
-        self.header_time = None
 
     @classmethod
     def from_arguments(klass, program_name, *args):
@@ -131,7 +180,7 @@ class WatchLess(object):
             # Time to run it again.
             if self.next_run is None or time.time() >= self.next_run:
                 # Start the command running.
-                self._popen = subprocess.Popen(self._command, shell=True,
+                self._popen = subprocess.Popen(self.command, shell=self.shell,
                                                stdout=subprocess.PIPE,
                                                stderr=subprocess.PIPE)
 
