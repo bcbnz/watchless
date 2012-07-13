@@ -37,6 +37,10 @@ parser.disable_interspersed_args()
 parser.add_option('-n', '--interval', dest="interval", type="float", default=2.0,
                   help="time to wait between updates [default: %defaults]",
                   metavar="seconds")
+parser.add_option('-p', '--precise', dest="precise_mode", action="store_true",
+                  help="try to run the command every <interval> seconds, "
+                  "rather than using <interval> second gaps between one "
+                  "finishing and the next starting", default=False)
 
 # List of characters which if present in a command indicate it needs to be run
 # in an external command.
@@ -52,7 +56,7 @@ class WatchLess(object):
     version_info = version_info
     hexversion = hexversion
 
-    def __init__(self, command, interval=2, shell=None):
+    def __init__(self, command, interval=2, precise_mode=False, shell=None):
         """The standard Python subprocess module is used to execute the command.
         This can either do so within the current process (``shell=False``) or
         using an external shell (``shell=True``). In general, ``shell=False`` is
@@ -76,6 +80,14 @@ class WatchLess(object):
         :param shell: Whether to spawn an external shell to run the command in.
                       If ``None``, the class tries to guess the appropriate
                       value based on the command.
+        :param precise_mode: Normally, ``interval`` seconds are left between one
+                             execution finishing and the next starting. Enabling
+                             precise mode means that the class will try to time
+                             it so there are ``interval`` seconds between the
+                             start of each execution. If the command takes
+                             longer than ``interval`` seconds to complete, then
+                             this target obviously cannot be met; instead, the
+                             command will be executed as often as possible.
 
         """
         # Details for the header. The time of the last execution is stored so it
@@ -112,6 +124,7 @@ class WatchLess(object):
         self.command = command
         self.shell = shell
         self.interval = interval
+        self.precise_mode = precise_mode
 
         # Some basic variables.
         self._popen = None
@@ -179,6 +192,7 @@ class WatchLess(object):
         initargs = {}
         if options.interval is not None:
             initargs['interval'] = options.interval
+        initargs['precise_mode'] = options.precise_mode
 
         # Create the object and we're done.
         return klass(command, **initargs)
@@ -196,8 +210,10 @@ class WatchLess(object):
         """
         # Not currently running.
         if self._popen is None:
+            t = time.time()
+
             # Time to run it again.
-            if self.next_run is None or time.time() >= self.next_run:
+            if self.next_run is None or t >= self.next_run:
                 # Start the command running.
                 self._popen = subprocess.Popen(self.command, shell=self.shell,
                                                stdout=subprocess.PIPE,
@@ -205,6 +221,11 @@ class WatchLess(object):
 
                 # Clear the buffer for any output.
                 self._buffer = []
+
+                # If we are running under precise mode, set the time for the
+                # next run.
+                if self.precise_mode:
+                    self.next_run = (self.next_run or t) + self.interval
 
                 # Update the header so that the inverted version is shown to
                 # indicate the command is being run.
@@ -226,7 +247,8 @@ class WatchLess(object):
         # Finished. Set the time to run it next and return the output.
         self._popen = None
         self.header_time = time.localtime()
-        self.next_run = time.time() + self.interval
+        if not self.precise_mode:
+            self.next_run = time.time() + self.interval
         return self._buffer
 
     def calculate_sizes(self):
