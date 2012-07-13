@@ -404,6 +404,10 @@ class WatchLess(object):
                 # Check for output.
                 content = self.process_command()
                 if content is not None:
+                    # Clear the old content.
+                    self.pad.clear()
+                    self.screen.clear()
+
                     # There is no point going through the output twice, once to
                     # calculate the width and once to add it to the pad.
                     # Instead, we'll resize as we go. To avoid too much
