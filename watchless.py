@@ -433,6 +433,9 @@ class WatchLess(object):
             # Create a pad for the output of the command.
             self.pad = curses.newpad(1, 1)
 
+            # And a second one for new output.
+            newpad = curses.newpad(1, 1)
+
             # Calculate size of page area etc.
             self.calculate_sizes()
 
@@ -449,8 +452,7 @@ class WatchLess(object):
                 content = self.process_command()
                 if content is not None:
                     # Clear the old content.
-                    self.pad.clear()
-                    self.screen.clear()
+                    newpad.clear()
 
                     # There is no point going through the output twice, once to
                     # calculate the width and once to add it to the pad.
@@ -460,7 +462,7 @@ class WatchLess(object):
                     # previous output is a reasonable starting point.
                     self.content_height = len(content)
                     w = self.content_width or 1
-                    self.pad.resize(self.content_height + 1, w + 1)
+                    newpad.resize(self.content_height + 1, w + 1)
 
                     # Add each line.
                     for y, line in enumerate(content):
@@ -474,13 +476,19 @@ class WatchLess(object):
                             while l > w:
                                 w *= 2
                                 self.content_width = l
-                            self.pad.resize(self.content_height + 1, w + 1)
+                            newpad.resize(self.content_height + 1, w + 1)
 
                         # Add this line.
-                        self.pad.addstr(y, 0, line)
+                        newpad.addstr(y, 0, line)
 
                     # Resize the pad to the final size.
-                    self.pad.resize(self.content_height + 1, self.content_width + 1)
+                    newpad.resize(self.content_height + 1, self.content_width + 1)
+
+                    # Switch the pads over.
+                    self.pad, newpad = newpad, self.pad
+
+                    # Clear the screen in preparation for redrawing.
+                    self.screen.clear()
 
                     # Recalculate page boundaries etc and mark for redrawing.
                     self.calculate_sizes()
