@@ -41,6 +41,9 @@ parser.add_option('-p', '--precise', dest="precise_mode", action="store_true",
                   help="try to run the command every <interval> seconds, "
                   "rather than using <interval> second gaps between one "
                   "finishing and the next starting", default=False)
+parser.add_option('-d', '--differences', dest="differences",
+                  action="store_true", help="Show differences in output "
+                  "between runs", default=False)
 parser.add_option('-t', '--no-title', dest="header", action="store_false",
                   help="don't show the header at the top of the screen",
                   default=True)
@@ -60,7 +63,7 @@ class WatchLess(object):
     hexversion = hexversion
 
     def __init__(self, command, interval=2, precise_mode=False, shell=None,
-                 header=True):
+                 differences=None, header=True):
         """The standard Python subprocess module is used to execute the command.
         This can either do so within the current process (``shell=False``) or
         using an external shell (``shell=True``). In general, ``shell=False`` is
@@ -92,6 +95,12 @@ class WatchLess(object):
                              longer than ``interval`` seconds to complete, then
                              this target obviously cannot be met; instead, the
                              command will be executed as often as possible.
+        :param differences: Whether or not to highlight differences in the
+                            output. Can be ``None``, for no highlighting,
+                            ``'sequential'`` to show the differences between
+                            sequential runs of the output, or ``'cumulative'``
+                            to show all the characters that have changed at
+                            least once since the first run.
         :param header: Whether or not to show the header at the top of the
                        screen.
 
@@ -132,6 +141,14 @@ class WatchLess(object):
         self.interval = interval
         self.precise_mode = precise_mode
         self.header = header
+
+        # Precompute difference info for efficiency.
+        self.differences = differences is not None
+        if self.differences:
+            if differences.lower().startswith('c'):
+                self.c_diff = True
+            else:
+                self.c_diff = False
 
         # Some basic variables.
         self._popen = None
@@ -202,6 +219,11 @@ class WatchLess(object):
             initargs['interval'] = options.interval
         initargs['precise_mode'] = options.precise_mode
         initargs['header'] = options.header
+
+        # Translate command line difference setting into the format the
+        # initialiser expects.
+        if options.differences:
+            initargs['differences'] = 'sequential'
 
         # Create the object and we're done.
         return klass(command, **initargs)
@@ -444,6 +466,7 @@ class WatchLess(object):
             self.screen.refresh()
 
             # Keep going as long as we need to.
+            first_run = True
             while True:
                 # Handle any key presses.
                 self.handle_keys()
@@ -478,8 +501,37 @@ class WatchLess(object):
                                 self.content_width = l
                             newpad.resize(self.content_height + 1, w + 1)
 
-                        # Add this line.
-                        newpad.addstr(y, 0, line)
+                        # If we are doing a diff, we need to add the output
+                        # character by character.
+                        if self.differences and not first_run:
+                            for x, c in enumerate(line):
+                                # Get the character previously in this position.
+                                # The lower 8 bits of the returned value is the
+                                # character itself, the rest is the display
+                                # attributes.
+                                temp = self.pad.inch(y, x)
+
+                                # If we are doing a cumulative diff, we start
+                                # with the previous attributes, otherwise we
+                                # start from normal.
+                                if self.c_diff:
+                                    attr = temp & ~0xFF
+                                else:
+                                    attr = curses.A_NORMAL
+
+                                # Highlight the display if the new character
+                                # differs from the old.
+                                c = ord(c)
+                                oldc = temp & 0xFF
+                                if c != oldc:
+                                    attr |= curses.A_STANDOUT
+
+                                # Add this character.
+                                newpad.addch(y, x, c, attr)
+
+                        # Not doing a diff, we can just add the line.
+                        else:
+                            newpad.addstr(y, 0, line)
 
                     # Resize the pad to the final size.
                     newpad.resize(self.content_height + 1, self.content_width + 1)
@@ -494,6 +546,7 @@ class WatchLess(object):
                     self.calculate_sizes()
                     self.dirty = True
                     self.update_header()
+                    first_run = False
 
                 # We need to refresh the screen.
                 if self.dirty:

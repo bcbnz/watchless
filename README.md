@@ -30,13 +30,14 @@ Options
   run finishing and the next starting, try to time it so there are *interval*
   seconds between each run starting. If the command takes longer than
   *interval* seconds to run, then it will be run as often as possible.
+* ``-d``, ``--differences`` - highlight the differences in the output of
+                              sequential runs of the command.
 * ``-t``, ``--no-title`` - don't show the header with the command and last execution time.
 
 Future work
 ===========
 
-* Support more of the standard ``watch`` options, such as showing the
-  difference between runs of the command.
+* Support more of the standard ``watch`` options.
 
 Bug reports
 ===========
