@@ -40,7 +40,7 @@ parser.add_option('-n', '--interval', dest="interval", type="float", default=2.0
 
 # List of characters which if present in a command indicate it needs to be run
 # in an external command.
-shell_chars = ('*', '|', '&', '(', '[')
+shell_chars = ('*', '|', '&', '(', '[', ' ')
 
 class WatchLess(object):
     """The main class which implements the periodic execution and paged display
