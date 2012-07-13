@@ -41,6 +41,9 @@ parser.add_option('-p', '--precise', dest="precise_mode", action="store_true",
                   help="try to run the command every <interval> seconds, "
                   "rather than using <interval> second gaps between one "
                   "finishing and the next starting", default=False)
+parser.add_option('-t', '--no-title', dest="header", action="store_false",
+                  help="don't show the header at the top of the screen",
+                  default=True)
 
 # List of characters which if present in a command indicate it needs to be run
 # in an external command.
@@ -56,7 +59,8 @@ class WatchLess(object):
     version_info = version_info
     hexversion = hexversion
 
-    def __init__(self, command, interval=2, precise_mode=False, shell=None):
+    def __init__(self, command, interval=2, precise_mode=False, shell=None,
+                 header=True):
         """The standard Python subprocess module is used to execute the command.
         This can either do so within the current process (``shell=False``) or
         using an external shell (``shell=True``). In general, ``shell=False`` is
@@ -88,6 +92,8 @@ class WatchLess(object):
                              longer than ``interval`` seconds to complete, then
                              this target obviously cannot be met; instead, the
                              command will be executed as often as possible.
+        :param header: Whether or not to show the header at the top of the
+                       screen.
 
         """
         # Details for the header. The time of the last execution is stored so it
@@ -125,6 +131,7 @@ class WatchLess(object):
         self.shell = shell
         self.interval = interval
         self.precise_mode = precise_mode
+        self.header = header
 
         # Some basic variables.
         self._popen = None
@@ -137,7 +144,8 @@ class WatchLess(object):
         self.screen_width = 0
         self.screen_height = 0
 
-        # The width and height of the content we wish to display.
+        # The y-position, width and height of the content we wish to display.
+        self.content_y = 2 if self.header else 0
         self.content_height = 0
         self.content_width = 0
 
@@ -193,6 +201,7 @@ class WatchLess(object):
         if options.interval is not None:
             initargs['interval'] = options.interval
         initargs['precise_mode'] = options.precise_mode
+        initargs['header'] = options.header
 
         # Create the object and we're done.
         return klass(command, **initargs)
@@ -263,7 +272,7 @@ class WatchLess(object):
         screenh, screenw = self.screen.getmaxyx()
         self.screen_height = screenh - 1
         self.screen_width = screenw - 1
-        self.page_height = self.screen_height - 2
+        self.page_height = self.screen_height - self.content_y
         self.page_width = self.screen_width
 
         # Calculate the maximum x and y positions for the pad. Note that this is
@@ -346,6 +355,9 @@ class WatchLess(object):
         whenever execution finished or the screen is resized.
 
         """
+        if not self.header:
+            return
+
         # How to display the header: inverted if the command is currently
         # running, normal if it is not.
         if self._popen is not None:
@@ -385,9 +397,6 @@ class WatchLess(object):
                 self.screen.addstr(0, tpos-5, "...", mode)
             else:
                 self.screen.addstr(0, 0, self.cmd_str, mode)
-
-        # No point doing all this work if we don't show it...
-        self.screen.refresh()
 
     def run(self, screen):
         """Run the display. This takes control of the execution and blocks until
@@ -429,6 +438,7 @@ class WatchLess(object):
 
             # Show the header so the user knows things have started up.
             self.update_header()
+            self.screen.refresh()
 
             # Keep going as long as we need to.
             while True:
@@ -484,7 +494,8 @@ class WatchLess(object):
                     self.x = max(min(self.x, self.right), 0)
 
                     # Redraw and we're done.
-                    self.pad.refresh(self.y, self.x, 2, 0, self.screen_height,
+                    self.screen.refresh()
+                    self.pad.refresh(self.y, self.x, self.content_y, 0, self.screen_height,
                                      self.screen_width)
                     self.dirty = False
 
