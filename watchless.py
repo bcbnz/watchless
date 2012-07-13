@@ -206,6 +206,10 @@ class WatchLess(object):
                 # Clear the buffer for any output.
                 self._buffer = []
 
+                # Update the header so that the inverted version is shown to
+                # indicate the command is being run.
+                self.update_header()
+
             # Nothing to return at this point.
             return None
 
@@ -320,9 +324,17 @@ class WatchLess(object):
         whenever execution finished or the screen is resized.
 
         """
-        # Clear the existing header.
-        self.screen.move(0, 0)
-        self.screen.clrtoeol()
+        # How to display the header: inverted if the command is currently
+        # running, normal if it is not.
+        if self._popen is not None:
+            mode = curses.A_REVERSE
+        else:
+            mode = curses.A_NORMAL
+
+        # Write over the existing header. By clearing it this way rather than
+        # with the curses clrtoeol() function, the 'background' of the header
+        # will also be inverted if appropriate.
+        self.screen.addstr(0, 0, ' ' * self.screen_width, mode)
 
         # If the command has been executed, show the time the execution
         # completed.
@@ -333,9 +345,9 @@ class WatchLess(object):
             tlen = len(tstr)
             tpos = self.screen_width - tlen
             if tpos < 0:
-                self.screen.addstr(0, 0, tstr[:self.screen_width])
+                self.screen.addstr(0, 0, tstr[:self.screen_width], mode)
             else:
-                self.screen.addstr(0, tpos, tstr)
+                self.screen.addstr(0, tpos, tstr, mode)
         else:
             tpos = self.screen_width
 
@@ -347,10 +359,10 @@ class WatchLess(object):
             # If the whole command string cannot fit before the date, truncate it
             # and append an ellipsis.
             if self.cmd_str_len > (tpos - 2):
-                self.screen.addstr(0, 0, self.cmd_str[:tpos-5])
-                self.screen.addstr(0, tpos-5, "...")
+                self.screen.addstr(0, 0, self.cmd_str[:tpos-5], mode)
+                self.screen.addstr(0, tpos-5, "...", mode)
             else:
-                self.screen.addstr(0, 0, self.cmd_str)
+                self.screen.addstr(0, 0, self.cmd_str, mode)
 
         # No point doing all this work if we don't show it...
         self.screen.refresh()
