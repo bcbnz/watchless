@@ -26,6 +26,11 @@ Options
 * ``--version`` - show program's version number and exit
 * ``-h``, ``--help`` - show a help message and exit
 * ``-n <seconds>``, ``--interval=<seconds>`` - time to wait between updates [default: 2.0s]
+* ``-p``, ``--precise`` - rather than waiting *interval* seconds between one
+  run finishing and the next starting, try to time it so there are *interval*
+  seconds between each run starting. If the command takes longer than
+  *interval* seconds to run, then it will be run as often as possible.
+* ``-t``, ``--no-title`` - don't show the header with the command and last execution time.
 
 Future work
 ===========
