@@ -267,6 +267,7 @@ class WatchLess(object):
 
         # Add any current output to our buffer.
         self._buffer.extend(self._popen.stdout.readlines())
+        self._buffer.extend(self._popen.stderr.readlines())
 
         # Update the status of the process.
         self._popen.poll()
