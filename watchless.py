@@ -151,7 +151,7 @@ class WatchLess(object):
                 self.c_diff = False
 
         # Some basic variables.
-        self._popen = None
+        self._process = None
         self.dirty = False
         self.screen = None
         self.pad = None
@@ -240,15 +240,15 @@ class WatchLess(object):
 
         """
         # Not currently running.
-        if self._popen is None:
+        if self._process is None:
             t = time.time()
 
             # Time to run it again.
             if self.next_run is None or t >= self.next_run:
                 # Start the command running.
-                self._popen = subprocess.Popen(self.command, shell=self.shell,
-                                               stdout=subprocess.PIPE,
-                                               stderr=subprocess.PIPE)
+                self._process = subprocess.Popen(self.command, shell=self.shell,
+                                                 stdout=subprocess.PIPE,
+                                                 stderr=subprocess.PIPE)
 
                 # Clear the buffer for any output.
                 self._buffer = []
@@ -266,18 +266,18 @@ class WatchLess(object):
             return None
 
         # Add any current output to our buffer.
-        self._buffer.extend(self._popen.stdout.readlines())
-        self._buffer.extend(self._popen.stderr.readlines())
+        self._buffer.extend(self._process.stdout.readlines())
+        self._buffer.extend(self._process.stderr.readlines())
 
         # Update the status of the process.
-        self._popen.poll()
+        self._process.poll()
 
         # Still running.
-        if self._popen.returncode is None:
+        if self._process.returncode is None:
             return None
 
         # Finished. Set the time to run it next and return the output.
-        self._popen = None
+        self._process = None
         self.header_time = time.localtime()
         if not self.precise_mode:
             self.next_run = time.time() + self.interval
@@ -383,7 +383,7 @@ class WatchLess(object):
 
         # How to display the header: inverted if the command is currently
         # running, normal if it is not.
-        if self._popen is not None:
+        if self._process is not None:
             mode = curses.A_REVERSE
         else:
             mode = curses.A_NORMAL
