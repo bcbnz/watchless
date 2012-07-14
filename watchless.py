@@ -44,6 +44,9 @@ parser.add_option('-p', '--precise', dest="precise_mode", action="store_true",
 parser.add_option('-d', '--differences', dest="differences",
                   action="store_true", help="Show differences in output "
                   "between runs", default=False)
+parser.add_option('-e', '--errexit', dest="errexit", action="store_true",
+                  default=False,
+                  help="Exit when the return code from <command> is non-zero")
 parser.add_option('-t', '--no-title', dest="header", action="store_false",
                   help="don't show the header at the top of the screen",
                   default=True)
@@ -63,7 +66,7 @@ class WatchLess(object):
     hexversion = hexversion
 
     def __init__(self, command, interval=2, precise_mode=False, shell=None,
-                 differences=None, header=True):
+                 differences=None, errexit=False, header=True):
         """The standard Python subprocess module is used to execute the command.
         This can either do so within the current process (``shell=False``) or
         using an external shell (``shell=True``). In general, ``shell=False`` is
@@ -101,6 +104,7 @@ class WatchLess(object):
                             sequential runs of the output, or ``'cumulative'``
                             to show all the characters that have changed at
                             least once since the first run.
+        :param errexit: Exit when the command results in a non-zero return code.
         :param header: Whether or not to show the header at the top of the
                        screen.
 
@@ -140,6 +144,7 @@ class WatchLess(object):
         self.shell = shell
         self.interval = interval
         self.precise_mode = precise_mode
+        self.errexit = errexit
         self.header = header
 
         # Precompute difference info for efficiency.
@@ -218,6 +223,7 @@ class WatchLess(object):
         if options.interval is not None:
             initargs['interval'] = options.interval
         initargs['precise_mode'] = options.precise_mode
+        initargs['errexit'] = options.errexit
         initargs['header'] = options.header
 
         # Translate command line difference setting into the format the
@@ -532,6 +538,10 @@ class WatchLess(object):
 
                 # Process has finished.
                 if rcode is not None:
+                    # An error and we need to exit.
+                    if rcode != 0 and self.errexit:
+                        break
+
                     # Switch the pads over.
                     self.pad, newpad = newpad, self.pad
                     self.content_width = new_w
