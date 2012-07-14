@@ -233,10 +233,10 @@ class WatchLess(object):
         takes care of timing the repetition, watching for the output etc. in a
         non-blocking manner. Call it regularly.
 
-        :return: If the command has finished executing and the output not yet
-                 collected, a list of the output of the command, with each entry
-                 corresponding to one line of output. Otherwise, ``None`` is
-                 returned.
+        :return: A tuple (return_code, output), where the output is in a list of
+                 lines. If the command has not finished, the return code is
+                 ``None``. If there is no new output to return at this time, an
+                 empty list is returned.
 
         """
         # Not currently running.
@@ -250,9 +250,6 @@ class WatchLess(object):
                                                  stdout=subprocess.PIPE,
                                                  stderr=subprocess.PIPE)
 
-                # Clear the buffer for any output.
-                self._buffer = []
-
                 # If we are running under precise mode, set the time for the
                 # next run.
                 if self.precise_mode:
@@ -263,25 +260,26 @@ class WatchLess(object):
                 self.update_header()
 
             # Nothing to return at this point.
-            return None
+            return None, []
 
-        # Add any current output to our buffer.
-        self._buffer.extend(self._process.stdout.readlines())
-        self._buffer.extend(self._process.stderr.readlines())
+        # Gather any current output.
+        output = self._process.stdout.readlines()
+        output.extend(self._process.stderr.readlines())
 
         # Update the status of the process.
         self._process.poll()
 
         # Still running.
         if self._process.returncode is None:
-            return None
+            return None, output
 
         # Finished. Set the time to run it next and return the output.
+        rcode = self._process.returncode
         self._process = None
         self.header_time = time.localtime()
         if not self.precise_mode:
             self.next_run = time.time() + self.interval
-        return self._buffer
+        return rcode, output
 
     def calculate_sizes(self):
         """Calculate the screen and page heights, plus the x- and y-positions of
@@ -459,6 +457,11 @@ class WatchLess(object):
             # And a second one for new output.
             newpad = curses.newpad(1, 1)
 
+            # State variables used when updating the new pad.
+            new_h = 0
+            new_w = 0
+            cur_l = 0
+
             # Calculate size of page area etc.
             self.calculate_sizes()
 
@@ -473,34 +476,24 @@ class WatchLess(object):
                 self.handle_keys()
 
                 # Check for output.
-                content = self.process_command()
-                if content is not None:
-                    # Clear the old content.
-                    newpad.clear()
+                rcode, output = self.process_command()
 
-                    # There is no point going through the output twice, once to
-                    # calculate the width and once to add it to the pad.
-                    # Instead, we'll resize as we go. To avoid too much
-                    # resizing, we'll double the width each time its too small,
-                    # and then do a final resize at the end. The width of the
-                    # previous output is a reasonable starting point.
-                    self.content_height = len(content)
-                    w = self.content_width or 1
-                    newpad.resize(self.content_height + 1, w + 1)
+                # New output.
+                if output:
+                    # Increase the height of the pad to suit.
+                    new_h += len(output)
+                    newpad.resize(new_h + 1, new_w + 1)
 
-                    # Add each line.
-                    for y, line in enumerate(content):
+                    # Process the output line by line.
+                    for line in output:
                         # Decode the line to a string if needed.
                         if self.decode:
                             line = line.decode(self.decode)
 
-                        # Update the approximate and real widths of the pad.
-                        l = len(line)
-                        if l > w:
-                            while l > w:
-                                w *= 2
-                                self.content_width = l
-                            newpad.resize(self.content_height + 1, w + 1)
+                        # Increase the width of the output if needed.
+                        if len(line) > new_w:
+                            new_w = len(line)
+                            newpad.resize(new_h + 1, new_w + 1)
 
                         # If we are doing a diff, we need to add the output
                         # character by character.
@@ -510,7 +503,7 @@ class WatchLess(object):
                                 # The lower 8 bits of the returned value is the
                                 # character itself, the rest is the display
                                 # attributes.
-                                temp = self.pad.inch(y, x)
+                                temp = self.pad.inch(cur_l, x)
 
                                 # If we are doing a cumulative diff, we start
                                 # with the previous attributes, otherwise we
@@ -528,26 +521,34 @@ class WatchLess(object):
                                     attr |= curses.A_STANDOUT
 
                                 # Add this character.
-                                newpad.addch(y, x, c, attr)
+                                newpad.addch(cur_l, x, c, attr)
 
                         # Not doing a diff, we can just add the line.
                         else:
-                            newpad.addstr(y, 0, line)
+                            newpad.addstr(cur_l, 0, line)
 
-                    # Resize the pad to the final size.
-                    newpad.resize(self.content_height + 1, self.content_width + 1)
+                        # Done with this line.
+                        cur_l += 1
 
+                # Process has finished.
+                if rcode is not None:
                     # Switch the pads over.
                     self.pad, newpad = newpad, self.pad
+                    self.content_width = new_w
+                    self.content_height = new_h
 
-                    # Clear the screen in preparation for redrawing.
-                    self.screen.clear()
-
-                    # Recalculate page boundaries etc and mark for redrawing.
+                    # Prepare for the refresh.
                     self.calculate_sizes()
-                    self.dirty = True
+                    self.screen.clear()
                     self.update_header()
+                    self.dirty = True
+
+                    # Prepare the 'new' pad for the next run.
+                    newpad.clear()
                     first_run = False
+                    new_w = 0
+                    new_h = 0
+                    cur_l = 0
 
                 # We need to refresh the screen.
                 if self.dirty:
