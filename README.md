@@ -32,7 +32,9 @@ Options
   *interval* seconds to run, then it will be run as often as possible.
 * ``-d``, ``--differences`` - highlight the differences in the output of
                               sequential runs of the command.
-* ``-t``, ``--no-title`` - don't show the header with the command and last execution time.
+* ``-b``, ``--beep`` - beep if the command exits with a non-zero return code.
+* ``-e``, ``--errexit`` - exit if the command exits with a non-zero return code.
+* ``-t``, ``--no-title`` - do not show the header with the command and last execution time.
 
 Future work
 ===========
