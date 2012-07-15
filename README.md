@@ -31,7 +31,11 @@ Options
   seconds between each run starting. If the command takes longer than
   *interval* seconds to run, then it will be run as often as possible.
 * ``-d``, ``--differences`` - highlight the differences in the output of
-                              sequential runs of the command.
+  sequential runs of the command. If you want to highlight all the positions
+  that have ever changed (i.e., a 'sticky' highlight), use
+  ``--differences=cumulative``. Note you cannot use ``-d cumulative`` as this
+  leads to an ambiguity (is ``cumulative`` an argument or the command to
+  execute?) since the argument is optional.
 * ``-b``, ``--beep`` - beep if the command exits with a non-zero return code.
 * ``-e``, ``--errexit`` - exit if the command exits with a non-zero return code.
 * ``-t``, ``--no-title`` - do not show the header with the command and last execution time.

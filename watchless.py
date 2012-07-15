@@ -43,7 +43,9 @@ parser.add_option('-p', '--precise', dest="precise_mode", action="store_true",
                   "finishing and the next starting", default=False)
 parser.add_option('-d', '--differences', dest="differences",
                   action="store_true", help="Show differences in output "
-                  "between runs", default=False)
+                  "between runs. Use --differences=cumulative to show all the "
+                  "positions that have changed since the first run.",
+                  default=False)
 parser.add_option('-b', '--beep', dest="beep", action="store_true",
                   default=False, help="Beep when <command> exits with a "
                   "non-zero return code.")
@@ -212,10 +214,21 @@ class WatchLess(object):
                              in any help/usage messages.
 
         """
+        args = list(args)
+
+        # Figure out the difference mode the user wants, if any. optparse does
+        # not allow optional arguments to options, so to make the command-line
+        # interface to match that of the original watch command, we need to do a
+        # bit of pre-processing here.
+        diff_mode = 'sequential'
+        for i, arg in enumerate(args):
+            if arg.startswith('--differences='):
+                args[i], diff_mode = arg.split('=', 1)
+
         # Run the arguments through the parser. This will print errors/help and
         # exit as appropriate.
         parser.prog = program_name
-        options, command = parser.parse_args(list(args))
+        options, command = parser.parse_args(args)
 
         # No command given.
         if not command:
@@ -235,7 +248,7 @@ class WatchLess(object):
         # Translate command line difference setting into the format the
         # initialiser expects.
         if options.differences:
-            initargs['differences'] = 'sequential'
+            initargs['differences'] = diff_mode
 
         # Create the object and we're done.
         return klass(command, **initargs)
