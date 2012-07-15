@@ -23,7 +23,7 @@ Usage
 Options
 -------
 
-* ``--version`` - show program's version number and exit
+* ``-v``, ``--version`` - show program's version number and exit
 * ``-h``, ``--help`` - show a help message and exit
 * ``-n <seconds>``, ``--interval=<seconds>`` - time to wait between updates [default: 2.0s]
 * ``-p``, ``--precise`` - rather than waiting *interval* seconds between one

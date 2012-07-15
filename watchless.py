@@ -32,7 +32,7 @@ hexversion = 0x000100f0
 usage = """Usage: %prog [options] <command>
 
 Execute a command periodically and display the output."""
-parser = optparse.OptionParser(usage=usage, version="%prog "+version)
+parser = optparse.OptionParser(usage=usage)
 parser.disable_interspersed_args()
 parser.add_option('-n', '--interval', dest="interval", type="float", default=2.0,
                   help="time to wait between updates [default: %defaults]",
@@ -55,6 +55,8 @@ parser.add_option('-e', '--errexit', dest="errexit", action="store_true",
 parser.add_option('-t', '--no-title', dest="header", action="store_false",
                   help="don't show the header at the top of the screen",
                   default=True)
+parser.add_option('-v', '--version', action="store_true", default=False,
+                  dest="version", help="Show the program version and exit.")
 
 # List of characters which if present in a command indicate it needs to be run
 # in an external command.
@@ -229,6 +231,12 @@ class WatchLess(object):
         # exit as appropriate.
         parser.prog = program_name
         options, command = parser.parse_args(args)
+
+        # Show the version.
+        if options.version:
+            sys.stdout.write(klass.version)
+            sys.stdout.write('\n')
+            raise SystemExit(0)
 
         # No command given.
         if not command:
