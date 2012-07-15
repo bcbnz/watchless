@@ -299,6 +299,10 @@ class WatchLess(object):
         output = self._process.stdout.readlines()
         output.extend(self._process.stderr.readlines())
 
+        # Decode the line to a string if needed.
+        if self.decode:
+            output = [line.decode(self.decode) for line in output]
+
         # Update the status of the process.
         self._process.poll()
 
@@ -519,10 +523,6 @@ class WatchLess(object):
 
                     # Process the output line by line.
                     for line in output:
-                        # Decode the line to a string if needed.
-                        if self.decode:
-                            line = line.decode(self.decode)
-
                         # Increase the width of the output if needed.
                         if len(line) > new_w:
                             new_w = len(line)
