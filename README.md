@@ -36,6 +36,7 @@ Options
   ``--differences=cumulative``. Note you cannot use ``-d cumulative`` as this
   leads to an ambiguity (is ``cumulative`` an argument or the command to
   execute?) since the argument is optional.
+* ``-c``, ``--color`` - interpret ANSI foreground colour sequences in the output.
 * ``-b``, ``--beep`` - beep if the command exits with a non-zero return code.
 * ``-e``, ``--errexit`` - exit if the command exits with a non-zero return code.
 * ``-t``, ``--no-title`` - do not show the header with the command and last execution time.
@@ -54,7 +55,7 @@ File any bug reports or feature requests in the project's GitHub issue tracker a
 Copyright
 =========
 
-watchless is copyright (c) 2012 Blair Bonnett
+watchless is copyright (c) 2012, 2013 Blair Bonnett
 
 License
 =======

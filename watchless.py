@@ -3,7 +3,7 @@
 # watchless: a Python script which emulates the Unix watch program and adds
 # paging support similar to that of the less program.
 #
-# Copyright (C) 2012 Blair Bonnett
+# Copyright (C) 2012, 2013 Blair Bonnett
 #
 # watchless is free software: you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
@@ -46,6 +46,9 @@ parser.add_option('-d', '--differences', dest="differences",
                   "between runs. Use --differences=cumulative to show all the "
                   "positions that have changed since the first run.",
                   default=False)
+parser.add_option('-c', '--color', dest="color", action="store_true",
+                  default=False, help="Interpret ANSI foreground colour "
+                  "sequences in the output.")
 parser.add_option('-b', '--beep', dest="beep", action="store_true",
                   default=False, help="Beep when <command> exits with a "
                   "non-zero return code.")
@@ -73,7 +76,8 @@ class WatchLess(object):
     hexversion = hexversion
 
     def __init__(self, command, interval=2, precise_mode=False, shell=None,
-                 differences=None, beep=False, errexit=False, header=True):
+                 differences=None, color=False, beep=False, errexit=False,
+                 header=True):
         """The standard Python subprocess module is used to execute the command.
         This can either do so within the current process (``shell=False``) or
         using an external shell (``shell=True``). In general, ``shell=False`` is
@@ -112,6 +116,8 @@ class WatchLess(object):
                             to show all the characters that have changed at
                             least once since the first run.
         :param beep: Beep when the command results in a non-zero return code.
+        :param color: Interpret ANSI color sequences to set the foreground
+                      colour.
         :param errexit: Exit when the command results in a non-zero return code.
         :param header: Whether or not to show the header at the top of the
                        screen.
@@ -154,6 +160,7 @@ class WatchLess(object):
         self.precise_mode = precise_mode
         self.errexit = errexit
         self.beep = beep
+        self.color = color
         self.header = header
 
         # Precompute difference info for efficiency.
@@ -193,6 +200,9 @@ class WatchLess(object):
         # Maximum limits of the previous x and y variables.
         self.bottom = 0
         self.right = 0
+
+        # State variable used for processing terminal escape codes.
+        self.cur_escape = curses.A_NORMAL
 
         # In Python 3 and above, the subprocess returns raw bytes which we need
         # to decode into strings. Lets figure out the appropriate encoding to
@@ -251,6 +261,7 @@ class WatchLess(object):
         initargs['precise_mode'] = options.precise_mode
         initargs['errexit'] = options.errexit
         initargs['beep'] = options.beep
+        initargs['color'] = options.color
         initargs['header'] = options.header
 
         # Translate command line difference setting into the format the
@@ -290,13 +301,13 @@ class WatchLess(object):
 
                 # Update the header so that the inverted version is shown to
                 # indicate the command is being run.
-                self.update_header()
+                #self.update_header()
 
             # Nothing to return at this point.
             return None, []
 
         # Gather any current output.
-        output = self._process.stdout.readlines()
+        output = self._process.stdout.read().splitlines()
         output.extend(self._process.stderr.readlines())
 
         # Decode the line to a string if needed.
@@ -456,6 +467,71 @@ class WatchLess(object):
             else:
                 self.screen.addstr(0, 0, self.cmd_str, mode)
 
+    def process_escape_codes(self, line):
+        """Process any ANSI escape codes in the line of text.
+
+        Input
+        -----
+
+        The line of text.
+
+        Return
+        ------
+
+        A tuple (length, chunks), where the length is the number of characters
+        that will be displayed, and chunks is a list of tuples (text,
+        displaystyle) containing the bits of text and the formatting to display
+        them in.
+
+        """
+        # Not colouring the output, just return the whole line.
+        if not self.color:
+            return len(line), [(line, curses.A_NORMAL)]
+
+        # Split into pieces around the escape character.
+        chunks = line.split('\033')
+
+        # If there was any text before the first escape character, display that
+        # with the escape code from the end of the previous line.
+        out = []
+        length = len(chunks[0])
+        if chunks[0]:
+            out.append((chunks[0], self.cur_escape))
+
+        for chunk in chunks[1:]:
+            # Delete to end of line. The later processing should take care of
+            # any clearing actually needed, but we don't need to process any
+            # later chunks in the line since they should be cleared...
+            if chunk.startswith('[K'):
+                text = chunk[2:]
+                out.append((text, self.cur_escape))
+                break
+
+            # Split out the display codes.
+            code, text = chunk.split('m', 1)
+            codes = [int(c) for c in code[1:].split(';')]
+
+            # Reset.
+            if codes[0] == 0:
+                self.cur_escape = curses.A_NORMAL
+
+            # Bold colour.
+            elif codes[0] == 1:
+                self.cur_escape = curses.color_pair(codes[1] - 29) | curses.A_BOLD
+
+            # Normal colour.
+            elif codes[0] == 2:
+                self.cur_escape = curses.color_pair(codes[1] - 29)
+
+            # Is there actually any text to display from this chunk, or was it
+            # just an update of the display style?
+            if text:
+                length += len(text)
+                out.append((text, self.cur_escape))
+
+        # And done.
+        return length, out
+
     def run(self, screen):
         """Run the display. This takes control of the execution and blocks until
         the user stops it.
@@ -473,6 +549,17 @@ class WatchLess(object):
             # colours for this screen.
             if curses.has_colors():
                 curses.use_default_colors()
+
+                # If we're going to display colours, set them up.
+                if self.color:
+                    curses.init_pair(1, curses.COLOR_BLACK, -1)
+                    curses.init_pair(2, curses.COLOR_RED, -1)
+                    curses.init_pair(3, curses.COLOR_GREEN, -1)
+                    curses.init_pair(4, curses.COLOR_YELLOW, -1)
+                    curses.init_pair(5, curses.COLOR_BLUE, -1)
+                    curses.init_pair(6, curses.COLOR_MAGENTA, -1)
+                    curses.init_pair(7, curses.COLOR_CYAN, -1)
+                    curses.init_pair(8, curses.COLOR_WHITE, -1)
 
             # Disable the cursor if possible.
             try:
@@ -523,42 +610,50 @@ class WatchLess(object):
 
                     # Process the output line by line.
                     for line in output:
+                        newpad.move(cur_l, 0)
+                        linelen, pieces = self.process_escape_codes(line)
+                        line = pieces[0][0]
+
                         # Increase the width of the output if needed.
-                        if len(line) > new_w:
-                            new_w = len(line)
+                        if linelen > new_w:
+                            new_w = linelen
                             newpad.resize(new_h + 1, new_w + 1)
 
                         # If we are doing a diff, we need to add the output
                         # character by character.
                         if self.differences and not first_run:
-                            for x, c in enumerate(line):
-                                # Get the character previously in this position.
-                                # The lower 8 bits of the returned value is the
-                                # character itself, the rest is the display
-                                # attributes.
-                                temp = self.pad.inch(cur_l, x)
+                            for piece, rawattr in pieces:
+                                for x, c in enumerate(piece):
+                                    # Get the character previously in this position.
+                                    # The lower 8 bits of the returned value is the
+                                    # character itself, the rest is the display
+                                    # attributes.
+                                    temp = self.pad.inch(cur_l, x)
 
-                                # If we are doing a cumulative diff, we start
-                                # with the previous attributes, otherwise we
-                                # start from normal.
-                                if self.c_diff:
-                                    attr = temp & ~0xFF
-                                else:
-                                    attr = curses.A_NORMAL
+                                    # If we are doing a cumulative diff, we start
+                                    # with the previous attributes, otherwise we
+                                    # start from normal.
+                                    if self.c_diff:
+                                        attr = temp & ~0xFF
+                                    else:
+                                        attr = curses.A_NORMAL
 
-                                # Highlight the display if the new character
-                                # differs from the old.
-                                c = ord(c)
-                                oldc = temp & 0xFF
-                                if c != oldc:
-                                    attr |= curses.A_STANDOUT
+                                    # Highlight the display if the new character
+                                    # differs from the old.
+                                    c = ord(c)
+                                    oldc = temp & 0xFF
+                                    if c != oldc:
+                                        attr |= curses.A_STANDOUT
 
-                                # Add this character.
-                                newpad.addch(cur_l, x, c, attr)
+                                    # Add this character.
+                                    newpad.addch(c, attr)
 
                         # Not doing a diff, we can just add the line.
                         else:
-                            newpad.addstr(cur_l, 0, line)
+                            for piece, attr in pieces:
+                                newpad.attron(attr)
+                                newpad.addstr(piece)
+                                newpad.attroff(attr)
 
                         # Done with this line.
                         cur_l += 1
@@ -590,6 +685,7 @@ class WatchLess(object):
                     new_w = 0
                     new_h = 0
                     cur_l = 0
+                    self.cur_escape = curses.A_NORMAL
 
                 # We need to refresh the screen.
                 if self.dirty:
