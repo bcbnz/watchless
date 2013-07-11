@@ -40,6 +40,8 @@ Options
 * ``-b``, ``--beep`` - beep if the command exits with a non-zero return code.
 * ``-e``, ``--errexit`` - exit if the command exits with a non-zero return code.
 * ``-t``, ``--no-title`` - do not show the header with the command and last execution time.
+* ``-r``, ``--no-return-code`` - do not show the last return code in the header at
+  the top of the screen.
 
 Future work
 ===========

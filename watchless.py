@@ -58,6 +58,9 @@ parser.add_option('-e', '--errexit', dest="errexit", action="store_true",
 parser.add_option('-t', '--no-title', dest="header", action="store_false",
                   help="don't show the header at the top of the screen",
                   default=True)
+parser.add_option('-r', '--no-return-code', dest="returncode", action="store_false",
+                  help="don't show the last return code in the header at the top of the screen",
+                  default=True)
 parser.add_option('-v', '--version', action="store_true", default=False,
                   dest="version", help="Show the program version and exit.")
 
@@ -77,7 +80,7 @@ class WatchLess(object):
 
     def __init__(self, command, interval=2, precise_mode=False, shell=None,
                  differences=None, color=False, beep=False, errexit=False,
-                 header=True):
+                 header=True, returncode=True):
         """The standard Python subprocess module is used to execute the command.
         This can either do so within the current process (``shell=False``) or
         using an external shell (``shell=True``). In general, ``shell=False`` is
@@ -121,6 +124,8 @@ class WatchLess(object):
         :param errexit: Exit when the command results in a non-zero return code.
         :param header: Whether or not to show the header at the top of the
                        screen.
+        :param returncode: Whether or not to show the last return code in the
+                           header.
 
         """
         # Details for the header. The time of the last execution is stored so it
@@ -132,6 +137,7 @@ class WatchLess(object):
         self.cmd_str = 'Every ' + str(interval) + 's: ' + ' '.join(command)
         self.cmd_str_len = len(self.cmd_str)
         self.header_time = None
+        self._last_return_code = None
 
         # Try to auto-detect if we need shell mode.
         if shell is None:
@@ -162,6 +168,7 @@ class WatchLess(object):
         self.beep = beep
         self.color = color
         self.header = header
+        self.returncode = returncode
 
         # Precompute difference info for efficiency.
         self.differences = differences is not None
@@ -263,6 +270,7 @@ class WatchLess(object):
         initargs['beep'] = options.beep
         initargs['color'] = options.color
         initargs['header'] = options.header
+        initargs['returncode'] = options.returncode
 
         # Translate command line difference setting into the format the
         # initialiser expects.
@@ -445,6 +453,15 @@ class WatchLess(object):
             # Let the time module convert it to a string in the appropriate
             # locale.
             tstr = time.strftime('%c', self.header_time)
+
+            # Add in the return code of the last run.
+            if self.returncode and self._last_return_code is not None:
+                if self.screen_width > (13 + self.cmd_str_len + len(tstr)):
+                    tstr = "{0:s} (Return: {1:d})".format(tstr, self._last_return_code)
+                else:
+                    tstr = "{0:s} (R:{1:d})".format(tstr, self._last_return_code)
+
+            # Sort out the position and truncation, and add the text.
             tlen = len(tstr)
             tpos = self.screen_width - tlen
             if tpos < 0:
@@ -660,6 +677,8 @@ class WatchLess(object):
 
                 # Process has finished.
                 if rcode is not None:
+                    self._last_return_code = rcode
+
                     # Non-zero return code.
                     if rcode != 0:
                         if self.beep:
