@@ -1,7 +1,7 @@
 watchless
 =========
 
-*Version 0.1.0 - 5 June 2012*
+*Latest release: version 0.2.0 - 12 July 2013*
 
 watchless is a Python clone of the standard Unix ``watch`` command with the
 addition of paging support along the lines of another standard Unix command,
@@ -42,11 +42,6 @@ Options
 * ``-t``, ``--no-title`` - do not show the header with the command and last execution time.
 * ``-r``, ``--no-return-code`` - do not show the last return code in the header at
   the top of the screen.
-
-Future work
-===========
-
-* Support more of the standard ``watch`` options.
 
 Bug reports
 ===========

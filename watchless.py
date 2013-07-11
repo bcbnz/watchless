@@ -24,9 +24,9 @@ import sys
 import time
 
 # Version information.
-version = '0.1.0'
-version_info = (0, 1, 0, 'final', 0)
-hexversion = 0x000100f0
+version = '0.2.0'
+version_info = (0, 2, 0, 'final', 0)
+hexversion = 0x000200f0
 
 # Set up a commandline parser.
 usage = """Usage: %prog [options] <command>
